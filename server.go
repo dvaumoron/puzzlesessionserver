@@ -95,7 +95,7 @@ func main() {
 		log.Fatal("Failed to load .env file")
 	}
 
-	sessionTimeoutSec, err := strconv.Atoi(os.Getenv("SESSION_TIMEOUT"))
+	sessionTimeoutSec, err := strconv.ParseInt(os.Getenv("SESSION_TIMEOUT"), 10, 64)
 	if err != nil {
 		log.Fatal("Failed to parse SESSION_TIMEOUT")
 	}
