@@ -23,20 +23,21 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"os"
+	"strconv"
 	"time"
 
 	pb "github.com/dvaumoron/puzzlesessionservice"
 	"github.com/go-redis/redis/v8"
+	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 )
-
-// TODO configuration reading
-var timeout time.Duration = 1260 * time.Second
 
 // server is used to implement puzzlesessionservice.SessionServer.
 type server struct {
 	pb.UnimplementedSessionServer
-	rdb *redis.Client
+	rdb            *redis.Client
+	sessionTimeout time.Duration
 }
 
 func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionId, error) {
@@ -50,14 +51,14 @@ func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionI
 		exists = err != nil || nb == 1
 	}
 	_, err := s.rdb.HSet(ctx, idStr, "sessionCreationTime", time.Now().String()).Result()
-	s.rdb.Expire(ctx, idStr, timeout)
+	s.rdb.Expire(ctx, idStr, s.sessionTimeout)
 	return &pb.SessionId{Id: id}, err
 }
 
 func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.SessionInfo, error) {
 	id := fmt.Sprint(in.Id)
 	info, err := s.rdb.HGetAll(ctx, id).Result()
-	s.rdb.Expire(ctx, id, timeout)
+	s.rdb.Expire(ctx, id, s.sessionTimeout)
 	return &pb.SessionInfo{Info: info}, err
 }
 
@@ -84,26 +85,43 @@ func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 			}
 		}
 	}
-	s.rdb.Expire(ctx, id, timeout)
+	s.rdb.Expire(ctx, id, s.sessionTimeout)
 	return &pb.SessionError{Err: err.Error()}, nil
 }
 
 func main() {
-	lis, err := net.Listen("tcp", ":50051")
+	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatal("Failed to load .env file")
+	}
+
+	sessionTimeoutSec, err := strconv.Atoi(os.Getenv("SESSION_TIMEOUT"))
+	if err != nil {
+		log.Fatal("Failed to parse SESSION_TIMEOUT")
+	}
+	sessionTimeout := time.Duration(sessionTimeoutSec) * time.Second
+
+	dbNum, err := strconv.Atoi(os.Getenv("REDIS_SERVER_DB"))
+	if err != nil {
+		log.Fatal("Failed to parse REDIS_SERVER_DB")
+	}
+
+	lis, err := net.Listen("tcp", ":"+os.Getenv("SERVICE_PORT"))
+	if err != nil {
+		log.Fatalf("Failed to listen : %v", err)
 	}
 
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
+		Addr:     os.Getenv("REDIS_SERVER_ADDR"),
+		Username: os.Getenv("REDIS_SERVER_USERNAME"),
+		Password: os.Getenv("REDIS_SERVER_PASSWORD"),
+		DB:       dbNum,
 	})
 
 	s := grpc.NewServer()
-	pb.RegisterSessionServer(s, &server{rdb: rdb})
-	log.Printf("server listening at %v", lis.Addr())
+	pb.RegisterSessionServer(s, &server{rdb: rdb, sessionTimeout: sessionTimeout})
+	log.Printf("Listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		log.Fatalf("Failed to serve : %v", err)
 	}
 }
