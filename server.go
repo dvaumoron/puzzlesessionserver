@@ -21,12 +21,17 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
+	"time"
 
 	pb "github.com/dvaumoron/puzzlesessionservice"
 	"github.com/go-redis/redis/v8"
 	"google.golang.org/grpc"
 )
+
+// TODO configuration reading
+var timeout time.Duration = 1260 * time.Second
 
 // server is used to implement puzzlesessionservice.SessionServer.
 type server struct {
@@ -35,12 +40,24 @@ type server struct {
 }
 
 func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionId, error) {
-	id := uint64(0) // TODO
-	return &pb.SessionId{Id: id}, nil
+	var id uint64
+	idStr := ""
+	exists := true
+	for exists {
+		id := rand.Uint64()
+		idStr := fmt.Sprint(id)
+		nb, err := s.rdb.Exists(ctx, idStr).Result()
+		exists = err != nil || nb == 1
+	}
+	_, err := s.rdb.HSet(ctx, idStr, "sessionCreationTime", time.Now().String()).Result()
+	s.rdb.Expire(ctx, idStr, timeout)
+	return &pb.SessionId{Id: id}, err
 }
 
 func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.SessionInfo, error) {
-	info, err := s.rdb.HGetAll(ctx, fmt.Sprint(in.Id)).Result()
+	id := fmt.Sprint(in.Id)
+	info, err := s.rdb.HGetAll(ctx, id).Result()
+	s.rdb.Expire(ctx, id, timeout)
 	return &pb.SessionInfo{Info: info}, err
 }
 
@@ -67,6 +84,7 @@ func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 			}
 		}
 	}
+	s.rdb.Expire(ctx, id, timeout)
 	return &pb.SessionError{Err: err.Error()}, nil
 }
 
