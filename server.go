@@ -19,6 +19,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -38,21 +39,21 @@ type server struct {
 	pb.UnimplementedSessionServer
 	rdb            *redis.Client
 	sessionTimeout time.Duration
+	retryNumber    int
 }
 
 func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionId, error) {
-	var id uint64
-	idStr := ""
-	exists := true
-	for exists {
+	for i := 0; i < s.retryNumber; i++ {
 		id := rand.Uint64()
 		idStr := fmt.Sprint(id)
 		nb, err := s.rdb.Exists(ctx, idStr).Result()
-		exists = err != nil || nb == 1
+		if err == nil && nb == 0 {
+			_, err := s.rdb.HSet(ctx, idStr, "sessionCreationTime", time.Now().String()).Result()
+			s.rdb.Expire(ctx, idStr, s.sessionTimeout)
+			return &pb.SessionId{Id: id}, err
+		}
 	}
-	_, err := s.rdb.HSet(ctx, idStr, "sessionCreationTime", time.Now().String()).Result()
-	s.rdb.Expire(ctx, idStr, s.sessionTimeout)
-	return &pb.SessionId{Id: id}, err
+	return nil, errors.New("increment reached maximum number of retries")
 }
 
 func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.SessionInfo, error) {
@@ -101,6 +102,11 @@ func main() {
 	}
 	sessionTimeout := time.Duration(sessionTimeoutSec) * time.Second
 
+	retryNumber, err := strconv.Atoi(os.Getenv("RETRY_NUMBER"))
+	if err != nil {
+		log.Fatal("Failed to parse RETRY_NUMBER")
+	}
+
 	dbNum, err := strconv.Atoi(os.Getenv("REDIS_SERVER_DB"))
 	if err != nil {
 		log.Fatal("Failed to parse REDIS_SERVER_DB")
@@ -119,7 +125,9 @@ func main() {
 	})
 
 	s := grpc.NewServer()
-	pb.RegisterSessionServer(s, &server{rdb: rdb, sessionTimeout: sessionTimeout})
+	pb.RegisterSessionServer(s, &server{
+		rdb: rdb, sessionTimeout: sessionTimeout, retryNumber: retryNumber,
+	})
 	log.Printf("Listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Failed to serve : %v", err)
