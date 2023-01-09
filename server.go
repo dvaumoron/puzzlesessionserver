@@ -88,19 +88,13 @@ func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 	pipe := s.rdb.TxPipeline()
 	pipe.HDel(ctx, id, keyToDelete...)
 	pipe.HSet(ctx, id, info)
-	cmds, err := pipe.Exec(ctx)
-	if err == nil {
-		for _, cmd := range cmds {
-			err = cmd.Err()
-			if err != nil {
-				break
-			}
-		}
-	}
-	if err == nil {
+	errStr := ""
+	if _, err := pipe.Exec(ctx); err == nil {
 		s.updateWithDefaultTTL(ctx, id)
+	} else {
+		errStr = err.Error()
 	}
-	return &pb.SessionError{Err: err.Error()}, nil
+	return &pb.SessionError{Err: errStr}, nil
 }
 
 func main() {
