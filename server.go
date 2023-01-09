@@ -42,24 +42,35 @@ type server struct {
 	retryNumber    int
 }
 
+func (s *server) updateWithDefaultTTL(ctx context.Context, id string) {
+	err := s.rdb.Expire(ctx, id, s.sessionTimeout)
+	if err != nil {
+		log.Println("Failed to set TTL :", err)
+	}
+}
+
 func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionId, error) {
 	for i := 0; i < s.retryNumber; i++ {
 		id := rand.Uint64()
 		idStr := fmt.Sprint(id)
 		nb, err := s.rdb.Exists(ctx, idStr).Result()
 		if err == nil && nb == 0 {
-			_, err := s.rdb.HSet(ctx, idStr, "sessionCreationTime", time.Now().String()).Result()
-			s.rdb.Expire(ctx, idStr, s.sessionTimeout)
+			err := s.rdb.HSet(ctx, idStr, "sessionCreationTime", time.Now().String()).Err()
+			if err == nil {
+				s.updateWithDefaultTTL(ctx, idStr)
+			}
 			return &pb.SessionId{Id: id}, err
 		}
 	}
-	return nil, errors.New("increment reached maximum number of retries")
+	return nil, errors.New("generate reached maximum number of retries")
 }
 
 func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.SessionInfo, error) {
 	id := fmt.Sprint(in.Id)
 	info, err := s.rdb.HGetAll(ctx, id).Result()
-	s.rdb.Expire(ctx, id, s.sessionTimeout)
+	if err == nil {
+		s.updateWithDefaultTTL(ctx, id)
+	}
 	return &pb.SessionInfo{Info: info}, err
 }
 
@@ -86,7 +97,9 @@ func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 			}
 		}
 	}
-	s.rdb.Expire(ctx, id, s.sessionTimeout)
+	if err == nil {
+		s.updateWithDefaultTTL(ctx, id)
+	}
 	return &pb.SessionError{Err: err.Error()}, nil
 }
 
