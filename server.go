@@ -34,6 +34,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+// this key maintains the existence of the session when there is no other data,
+// but it is never send to client nor updated by it
+const creationTimeName = "sessionCreationTime"
+
 // server is used to implement puzzlesessionservice.SessionServer.
 type server struct {
 	pb.UnimplementedSessionServer
@@ -55,7 +59,7 @@ func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionI
 		idStr := fmt.Sprint(id)
 		nb, err := s.rdb.Exists(ctx, idStr).Result()
 		if err == nil && nb == 0 {
-			err := s.rdb.HSet(ctx, idStr, "sessionCreationTime", time.Now().String()).Err()
+			err := s.rdb.HSet(ctx, idStr, creationTimeName, time.Now().String()).Err()
 			if err == nil {
 				s.updateWithDefaultTTL(ctx, idStr)
 			}
@@ -70,6 +74,8 @@ func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.Sess
 	info, err := s.rdb.HGetAll(ctx, id).Result()
 	if err == nil {
 		s.updateWithDefaultTTL(ctx, id)
+
+		delete(info, creationTimeName)
 	}
 	return &pb.SessionInfo{Info: info}, err
 }
@@ -78,7 +84,9 @@ func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 	info := map[string]any{}
 	keyToDelete := []string{}
 	for k, v := range in.Info {
-		if v == "" {
+		if k == creationTimeName {
+			continue
+		} else if v == "" {
 			keyToDelete = append(keyToDelete, k)
 		} else {
 			info[k] = v
