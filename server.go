@@ -18,92 +18,18 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"os"
 	"strconv"
 	"time"
 
+	redisclient "github.com/dvaumoron/puzzleredisclient"
+	"github.com/dvaumoron/puzzlesessionserver/sessionserver"
 	pb "github.com/dvaumoron/puzzlesessionservice"
-	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 )
-
-// this key maintains the existence of the session when there is no other data,
-// but it is never send to client nor updated by it
-const creationTimeName = "sessionCreationTime"
-
-// server is used to implement puzzlesessionservice.SessionServer.
-type server struct {
-	pb.UnimplementedSessionServer
-	rdb            *redis.Client
-	sessionTimeout time.Duration
-	retryNumber    int
-}
-
-func (s *server) updateWithDefaultTTL(ctx context.Context, id string) {
-	err := s.rdb.Expire(ctx, id, s.sessionTimeout)
-	if err != nil {
-		log.Println("Failed to set TTL :", err)
-	}
-}
-
-func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionId, error) {
-	for i := 0; i < s.retryNumber; i++ {
-		id := rand.Uint64()
-		idStr := fmt.Sprint(id)
-		nb, err := s.rdb.Exists(ctx, idStr).Result()
-		if err == nil && nb == 0 {
-			err := s.rdb.HSet(ctx, idStr, creationTimeName, time.Now().String()).Err()
-			if err == nil {
-				s.updateWithDefaultTTL(ctx, idStr)
-			}
-			return &pb.SessionId{Id: id}, err
-		}
-	}
-	return nil, errors.New("generate reached maximum number of retries")
-}
-
-func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.SessionInfo, error) {
-	id := fmt.Sprint(in.Id)
-	info, err := s.rdb.HGetAll(ctx, id).Result()
-	if err == nil {
-		s.updateWithDefaultTTL(ctx, id)
-
-		delete(info, creationTimeName)
-	}
-	return &pb.SessionInfo{Info: info}, err
-}
-
-func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*pb.SessionError, error) {
-	info := map[string]any{}
-	keyToDelete := []string{}
-	for k, v := range in.Info {
-		if k == creationTimeName {
-			continue
-		} else if v == "" {
-			keyToDelete = append(keyToDelete, k)
-		} else {
-			info[k] = v
-		}
-	}
-	id := fmt.Sprint(in.Id)
-	pipe := s.rdb.TxPipeline()
-	pipe.HDel(ctx, id, keyToDelete...)
-	pipe.HSet(ctx, id, info)
-	errStr := ""
-	if _, err := pipe.Exec(ctx); err == nil {
-		s.updateWithDefaultTTL(ctx, id)
-	} else {
-		errStr = err.Error()
-	}
-	return &pb.SessionError{Err: errStr}, nil
-}
 
 func main() {
 	err := godotenv.Load()
@@ -122,27 +48,15 @@ func main() {
 		log.Fatal("Failed to parse RETRY_NUMBER")
 	}
 
-	dbNum, err := strconv.Atoi(os.Getenv("REDIS_SERVER_DB"))
-	if err != nil {
-		log.Fatal("Failed to parse REDIS_SERVER_DB")
-	}
-
 	lis, err := net.Listen("tcp", ":"+os.Getenv("SERVICE_PORT"))
 	if err != nil {
 		log.Fatalf("Failed to listen : %v", err)
 	}
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     os.Getenv("REDIS_SERVER_ADDR"),
-		Username: os.Getenv("REDIS_SERVER_USERNAME"),
-		Password: os.Getenv("REDIS_SERVER_PASSWORD"),
-		DB:       dbNum,
-	})
+	rdb := redisclient.Create()
 
 	s := grpc.NewServer()
-	pb.RegisterSessionServer(s, &server{
-		rdb: rdb, sessionTimeout: sessionTimeout, retryNumber: retryNumber,
-	})
+	pb.RegisterSessionServer(s, sessionserver.New(rdb, sessionTimeout, retryNumber))
 	log.Printf("Listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Failed to serve : %v", err)

@@ -6,6 +6,8 @@ github.com/cespare/xxhash/v2 v2.1.2/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XL
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
+github.com/dvaumoron/puzzleredisclient v1.0.0 h1:vSM4SUJkFpIygWkTNqskPllyr91DQ6TQVrKfZ53VClM=
+github.com/dvaumoron/puzzleredisclient v1.0.0/go.mod h1:ZSJkFICpw+rbqEBH24CY3dUNtupGo+TqxVSJ00OFCTY=
 github.com/dvaumoron/puzzlesessionservice v1.1.0 h1:pQ9HDCaMcj+sFrtsswVkqJ47Pacq8GZUXZnnlA8gGac=
 github.com/dvaumoron/puzzlesessionservice v1.1.0/go.mod h1:VB2EkzytHS7t6A6pCRl/Pu80VnwHcGlRNcXx9Zkmicg=
 github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.mod h1:YTl/9mNaCwkRvm6d1a2C3ymFceY/DCBVvsKhRF0iEA4=
