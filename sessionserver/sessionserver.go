@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"sync"
 	"time"
 
 	pb "github.com/dvaumoron/puzzlesessionservice"
@@ -33,26 +34,30 @@ import (
 // but it is never send to client nor updated by it
 const creationTimeName = "sessionCreationTime"
 
-// Server is used to implement puzzlesessionservice.SessionServer
-type Server struct {
+// server is used to implement puzzlesessionservice.SessionServer
+type server struct {
 	pb.UnimplementedSessionServer
 	rdb            *redis.Client
+	generateMutex  sync.Mutex
 	sessionTimeout time.Duration
 	retryNumber    int
 }
 
-func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int) *Server {
-	return &Server{rdb: rdb, sessionTimeout: sessionTimeout, retryNumber: retryNumber}
+func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int) pb.SessionServer {
+	return &server{rdb: rdb, sessionTimeout: sessionTimeout, retryNumber: retryNumber}
 }
 
-func (s *Server) updateWithDefaultTTL(ctx context.Context, id string) {
+func (s *server) updateWithDefaultTTL(ctx context.Context, id string) {
 	err := s.rdb.Expire(ctx, id, s.sessionTimeout)
 	if err != nil {
 		log.Println("Failed to set TTL :", err)
 	}
 }
 
-func (s *Server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionId, error) {
+func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionId, error) {
+	// avoid id clash when generating, but possible bottleneck
+	s.generateMutex.Lock()
+	defer s.generateMutex.Unlock()
 	for i := 0; i < s.retryNumber; i++ {
 		id := rand.Uint64()
 		idStr := fmt.Sprint(id)
@@ -68,18 +73,19 @@ func (s *Server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionI
 	return nil, errors.New("generate reached maximum number of retries")
 }
 
-func (s *Server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.SessionInfo, error) {
+func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.SessionInfo, error) {
 	id := fmt.Sprint(in.Id)
 	info, err := s.rdb.HGetAll(ctx, id).Result()
-	if err == nil {
-		s.updateWithDefaultTTL(ctx, id)
-
-		delete(info, creationTimeName)
+	if err != nil {
+		return nil, err
 	}
-	return &pb.SessionInfo{Info: info}, err
+
+	s.updateWithDefaultTTL(ctx, id)
+	delete(info, creationTimeName)
+	return &pb.SessionInfo{Info: info}, nil
 }
 
-func (s *Server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*pb.SessionError, error) {
+func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*pb.SessionError, error) {
 	info := map[string]any{}
 	keyToDelete := []string{}
 	for k, v := range in.Info {
@@ -95,11 +101,9 @@ func (s *Server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 	pipe := s.rdb.TxPipeline()
 	pipe.HDel(ctx, id, keyToDelete...)
 	pipe.HSet(ctx, id, info)
-	errStr := ""
-	if _, err := pipe.Exec(ctx); err == nil {
-		s.updateWithDefaultTTL(ctx, id)
-	} else {
-		errStr = err.Error()
+	if _, err := pipe.Exec(ctx); err != nil {
+		return &pb.SessionError{Err: err.Error()}, nil
 	}
-	return &pb.SessionError{Err: errStr}, nil
+	s.updateWithDefaultTTL(ctx, id)
+	return &pb.SessionError{}, nil
 }
