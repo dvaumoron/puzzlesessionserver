@@ -62,12 +62,16 @@ func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionI
 		id := rand.Uint64()
 		idStr := fmt.Sprint(id)
 		nb, err := s.rdb.Exists(ctx, idStr).Result()
-		if err == nil && nb == 0 {
+		if err != nil {
+			return nil, err
+		}
+		if nb == 0 {
 			err := s.rdb.HSet(ctx, idStr, creationTimeName, time.Now().String()).Err()
-			if err == nil {
-				s.updateWithDefaultTTL(ctx, idStr)
+			if err != nil {
+				return nil, err
 			}
-			return &pb.SessionId{Id: id}, err
+			s.updateWithDefaultTTL(ctx, idStr)
+			return &pb.SessionId{Id: id}, nil
 		}
 	}
 	return nil, errors.New("generate reached maximum number of retries")
