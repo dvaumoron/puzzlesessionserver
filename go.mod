@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/dvaumoron/puzzleredisclient v1.0.0
-	github.com/dvaumoron/puzzlesessionservice v1.1.0
+	github.com/dvaumoron/puzzlesessionservice v1.2.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/joho/godotenv v1.4.0
 	google.golang.org/grpc v1.51.0

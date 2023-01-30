@@ -34,6 +34,8 @@ import (
 // but it is never send to client nor updated by it
 const creationTimeName = "sessionCreationTime"
 
+var errInternal = errors.New("internal service error")
+
 // server is used to implement puzzlesessionservice.SessionServer
 type server struct {
 	pb.UnimplementedSessionServer
@@ -63,12 +65,14 @@ func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionI
 		idStr := fmt.Sprint(id)
 		nb, err := s.rdb.Exists(ctx, idStr).Result()
 		if err != nil {
-			return nil, err
+			logError(err)
+			return nil, errInternal
 		}
 		if nb == 0 {
 			err := s.rdb.HSet(ctx, idStr, creationTimeName, time.Now().String()).Err()
 			if err != nil {
-				return nil, err
+				logError(err)
+				return nil, errInternal
 			}
 			s.updateWithDefaultTTL(ctx, idStr)
 			return &pb.SessionId{Id: id}, nil
@@ -81,7 +85,8 @@ func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.Sess
 	id := fmt.Sprint(in.Id)
 	info, err := s.rdb.HGetAll(ctx, id).Result()
 	if err != nil {
-		return nil, err
+		logError(err)
+		return nil, errInternal
 	}
 
 	s.updateWithDefaultTTL(ctx, id)
@@ -89,7 +94,7 @@ func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.Sess
 	return &pb.SessionInfo{Info: info}, nil
 }
 
-func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*pb.SessionError, error) {
+func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*pb.Response, error) {
 	info := map[string]any{}
 	keyToDelete := []string{}
 	for k, v := range in.Info {
@@ -106,8 +111,13 @@ func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 	pipe.HDel(ctx, id, keyToDelete...)
 	pipe.HSet(ctx, id, info)
 	if _, err := pipe.Exec(ctx); err != nil {
-		return &pb.SessionError{Err: err.Error()}, nil
+		logError(err)
+		return nil, errInternal
 	}
 	s.updateWithDefaultTTL(ctx, id)
-	return &pb.SessionError{}, nil
+	return &pb.Response{Success: true}, nil
+}
+
+func logError(err error) {
+	log.Println("Failed during Redis call :", err)
 }
