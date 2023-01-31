@@ -27,7 +27,7 @@ import (
 	"time"
 
 	pb "github.com/dvaumoron/puzzlesessionservice"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 // this key maintains the existence of the session when there is no other data,
