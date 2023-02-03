@@ -19,22 +19,19 @@ package main
 
 import (
 	"log"
-	"net"
 	"os"
 	"strconv"
 	"time"
 
+	grpcserver "github.com/dvaumoron/puzzlegrpcserver"
 	redisclient "github.com/dvaumoron/puzzleredisclient"
 	"github.com/dvaumoron/puzzlesessionserver/sessionserver"
 	pb "github.com/dvaumoron/puzzlesessionservice"
-	"github.com/joho/godotenv"
-	"google.golang.org/grpc"
 )
 
 func main() {
-	if godotenv.Overload() == nil {
-		log.Println("Loaded .env file")
-	}
+	// should start with this, to benefit from the call to godotenv
+	s := grpcserver.New()
 
 	sessionTimeoutSec, err := strconv.ParseInt(os.Getenv("SESSION_TIMEOUT"), 10, 64)
 	if err != nil {
@@ -47,17 +44,9 @@ func main() {
 		log.Fatal("Failed to parse RETRY_NUMBER")
 	}
 
-	lis, err := net.Listen("tcp", ":"+os.Getenv("SERVICE_PORT"))
-	if err != nil {
-		log.Fatal("Failed to listen :", err)
-	}
-
 	rdb := redisclient.Create()
 
-	s := grpc.NewServer()
 	pb.RegisterSessionServer(s, sessionserver.New(rdb, sessionTimeout, retryNumber))
-	log.Println("Listening at", lis.Addr())
-	if err := s.Serve(lis); err != nil {
-		log.Fatal("Failed to serve :", err)
-	}
+
+	s.Start()
 }
