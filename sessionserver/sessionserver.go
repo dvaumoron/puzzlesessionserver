@@ -38,8 +38,6 @@ const redisCallMsg = "Failed during Redis call :"
 
 var errInternal = errors.New("internal service error")
 
-type sessionUpdater func(rdb *redis.Client, ctx context.Context, id string, keyToDelete []string, info map[string]any) error
-
 // server is used to implement puzzlesessionservice.SessionServer
 type server struct {
 	pb.UnimplementedSessionServer
@@ -47,7 +45,7 @@ type server struct {
 	generateMutex  sync.Mutex
 	sessionTimeout time.Duration
 	retryNumber    int
-	updater        sessionUpdater
+	updater        func(*redis.Client, context.Context, string, []string, map[string]any) error
 }
 
 func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int, debug bool) pb.SessionServer {
