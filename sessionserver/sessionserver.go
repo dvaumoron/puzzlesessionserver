@@ -136,9 +136,8 @@ func updateSessionInfoTx(rdb *redis.Client, ctx context.Context, id string, keyT
 		pipe.HSet(ctx, id, info)
 	}
 	if haveActions {
-		if _, err := pipe.Exec(ctx); err != nil {
-			return err
-		}
+		_, err := pipe.Exec(ctx)
+		return err
 	}
 	return nil
 }
