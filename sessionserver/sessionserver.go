@@ -38,6 +38,8 @@ const redisCallMsg = "Failed during Redis call :"
 
 var errInternal = errors.New("internal service error")
 
+type sessionUpdater func(rdb *redis.Client, ctx context.Context, id string, keyToDelete []string, info map[string]any) error
+
 // server is used to implement puzzlesessionservice.SessionServer
 type server struct {
 	pb.UnimplementedSessionServer
@@ -45,10 +47,16 @@ type server struct {
 	generateMutex  sync.Mutex
 	sessionTimeout time.Duration
 	retryNumber    int
+	updater        sessionUpdater
 }
 
-func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int) pb.SessionServer {
-	return &server{rdb: rdb, sessionTimeout: sessionTimeout, retryNumber: retryNumber}
+func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int, debug bool) pb.SessionServer {
+	updater := updateSessionInfoTx
+	if debug {
+		log.Println("Mode debug on")
+		updater = updateSessionInfo
+	}
+	return &server{rdb: rdb, sessionTimeout: sessionTimeout, retryNumber: retryNumber, updater: updater}
 }
 
 func (s *server) updateWithDefaultTTL(ctx context.Context, id string) {
@@ -108,13 +116,45 @@ func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 		}
 	}
 	id := fmt.Sprint(in.Id)
-	pipe := s.rdb.TxPipeline()
-	pipe.HDel(ctx, id, keyToDelete...)
-	pipe.HSet(ctx, id, info)
-	if _, err := pipe.Exec(ctx); err != nil {
-		log.Println(redisCallMsg, err)
-		return nil, errInternal
+	if err := s.updater(s.rdb, ctx, id, keyToDelete, info); err != nil {
+		return nil, err
 	}
 	s.updateWithDefaultTTL(ctx, id)
 	return &pb.Response{Success: true}, nil
+}
+
+func updateSessionInfoTx(rdb *redis.Client, ctx context.Context, id string, keyToDelete []string, info map[string]any) error {
+	haveActions := false
+	pipe := rdb.TxPipeline()
+	if len(keyToDelete) != 0 {
+		haveActions = true
+		pipe.HDel(ctx, id, keyToDelete...)
+	}
+	if len(info) != 0 {
+		haveActions = true
+		pipe.HSet(ctx, id, info)
+	}
+	if haveActions {
+		if _, err := pipe.Exec(ctx); err != nil {
+			log.Println(redisCallMsg, err)
+			return errInternal
+		}
+	}
+	return nil
+}
+
+func updateSessionInfo(rdb *redis.Client, ctx context.Context, id string, keyToDelete []string, info map[string]any) error {
+	if len(keyToDelete) != 0 {
+		if err := rdb.HDel(ctx, id, keyToDelete...).Err(); err != nil {
+			log.Println(redisCallMsg, err)
+			return errInternal
+		}
+	}
+	if len(info) != 0 {
+		if err := rdb.HSet(ctx, id, info).Err(); err != nil {
+			log.Println(redisCallMsg, err)
+			return errInternal
+		}
+	}
+	return nil
 }

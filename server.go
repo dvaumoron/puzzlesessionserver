@@ -21,6 +21,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	grpcserver "github.com/dvaumoron/puzzlegrpcserver"
@@ -44,9 +45,11 @@ func main() {
 		log.Fatal("Failed to parse RETRY_NUMBER")
 	}
 
+	debug := strings.TrimSpace(os.Getenv("DEBUG_MODE")) != ""
+
 	rdb := redisclient.Create()
 
-	pb.RegisterSessionServer(s, sessionserver.New(rdb, sessionTimeout, retryNumber))
+	pb.RegisterSessionServer(s, sessionserver.New(rdb, sessionTimeout, retryNumber, debug))
 
 	s.Start()
 }
