@@ -117,7 +117,8 @@ func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 	}
 	id := fmt.Sprint(in.Id)
 	if err := s.updater(s.rdb, ctx, id, keyToDelete, info); err != nil {
-		return nil, err
+		log.Println(redisCallMsg, err)
+		return nil, errInternal
 	}
 	s.updateWithDefaultTTL(ctx, id)
 	return &pb.Response{Success: true}, nil
@@ -136,8 +137,7 @@ func updateSessionInfoTx(rdb *redis.Client, ctx context.Context, id string, keyT
 	}
 	if haveActions {
 		if _, err := pipe.Exec(ctx); err != nil {
-			log.Println(redisCallMsg, err)
-			return errInternal
+			return err
 		}
 	}
 	return nil
@@ -146,15 +146,11 @@ func updateSessionInfoTx(rdb *redis.Client, ctx context.Context, id string, keyT
 func updateSessionInfo(rdb *redis.Client, ctx context.Context, id string, keyToDelete []string, info map[string]any) error {
 	if len(keyToDelete) != 0 {
 		if err := rdb.HDel(ctx, id, keyToDelete...).Err(); err != nil {
-			log.Println(redisCallMsg, err)
-			return errInternal
+			return err
 		}
 	}
 	if len(info) != 0 {
-		if err := rdb.HSet(ctx, id, info).Err(); err != nil {
-			log.Println(redisCallMsg, err)
-			return errInternal
-		}
+		return rdb.HSet(ctx, id, info).Err()
 	}
 	return nil
 }
