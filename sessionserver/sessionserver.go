@@ -52,8 +52,7 @@ func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int) pb.Se
 }
 
 func (s *server) updateWithDefaultTTL(ctx context.Context, id string) {
-	err := s.rdb.Expire(ctx, id, s.sessionTimeout)
-	if err != nil {
+	if err := s.rdb.Expire(ctx, id, s.sessionTimeout).Err(); err != nil {
 		log.Println("Failed to set TTL :", err)
 	}
 }
