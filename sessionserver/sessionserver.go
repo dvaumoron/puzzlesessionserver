@@ -92,6 +92,10 @@ func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.Sess
 	id := fmt.Sprint(in.Id)
 	info, err := s.rdb.HGetAll(ctx, id).Result()
 	if err != nil {
+		if err == redis.Nil {
+			return &pb.SessionInfo{}, nil
+		}
+
 		log.Println(redisCallMsg, err)
 		return nil, errInternal
 	}
