@@ -5,8 +5,8 @@ github.com/cespare/xxhash/v2 v2.2.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XL
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
-github.com/dvaumoron/puzzlegrpcserver v1.0.1 h1:Vj11s5AKjxZKjTIk3/VOUzT0sJpH8gOnmOlqyZpQlk4=
-github.com/dvaumoron/puzzlegrpcserver v1.0.1/go.mod h1:OBO9CWPuUlh4EyKPHKUAlLqDjs3Wjb1/MH0weG3JcuI=
+github.com/dvaumoron/puzzlegrpcserver v1.1.0 h1:mNWUpuhm2B/1CcO1cH9gul8IuWrorbEcBIpkQ9uMrg4=
+github.com/dvaumoron/puzzlegrpcserver v1.1.0/go.mod h1:OBO9CWPuUlh4EyKPHKUAlLqDjs3Wjb1/MH0weG3JcuI=
 github.com/dvaumoron/puzzleredisclient v1.0.1 h1:u0BRtNzekOH3KmCPndjRT7RPxpGB+f4W+f4yfQV/o8g=
 github.com/dvaumoron/puzzleredisclient v1.0.1/go.mod h1:JANlhWKKYlolRFeLPEta29dV50C+GFDy69PuxRgmcnM=
 github.com/dvaumoron/puzzlesessionservice v1.2.0 h1:SHAZnBgSyCtyLJI69lQIX+MbKoR3vv+/PO4m5hafymQ=
