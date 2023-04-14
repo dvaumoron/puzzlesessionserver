@@ -36,13 +36,13 @@ func main() {
 
 	sessionTimeoutSec, err := strconv.ParseInt(os.Getenv("SESSION_TIMEOUT"), 10, 64)
 	if err != nil {
-		log.Fatal("Failed to parse SESSION_TIMEOUT")
+		log.Fatalln("Failed to parse SESSION_TIMEOUT")
 	}
 	sessionTimeout := time.Duration(sessionTimeoutSec) * time.Second
 
 	retryNumber, err := strconv.Atoi(os.Getenv("RETRY_NUMBER"))
 	if err != nil {
-		log.Fatal("Failed to parse RETRY_NUMBER")
+		log.Fatalln("Failed to parse RETRY_NUMBER")
 	}
 
 	debug := strings.TrimSpace(os.Getenv("DEBUG_MODE")) != ""
