@@ -18,7 +18,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -36,20 +35,20 @@ func main() {
 
 	sessionTimeoutSec, err := strconv.ParseInt(os.Getenv("SESSION_TIMEOUT"), 10, 64)
 	if err != nil {
-		log.Fatalln("Failed to parse SESSION_TIMEOUT")
+		s.Logger.Fatal("Failed to parse SESSION_TIMEOUT")
 	}
 	sessionTimeout := time.Duration(sessionTimeoutSec) * time.Second
 
 	retryNumber, err := strconv.Atoi(os.Getenv("RETRY_NUMBER"))
 	if err != nil {
-		log.Fatalln("Failed to parse RETRY_NUMBER")
+		s.Logger.Fatal("Failed to parse RETRY_NUMBER")
 	}
 
 	debug := strings.TrimSpace(os.Getenv("DEBUG_MODE")) != ""
 
-	rdb := redisclient.Create()
+	rdb := redisclient.Create(s.Logger)
 
-	pb.RegisterSessionServer(s, sessionserver.New(rdb, sessionTimeout, retryNumber, debug))
+	pb.RegisterSessionServer(s, sessionserver.New(rdb, sessionTimeout, retryNumber, s.Logger, debug))
 
 	s.Start()
 }

@@ -20,21 +20,21 @@ package sessionserver
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
 	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 
 	pb "github.com/dvaumoron/puzzlesessionservice"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 // this key maintains the existence of the session when there is no other data,
 // but it is never send to client nor updated by it
 const creationTimeName = "sessionCreationTime"
 
-const redisCallMsg = "Failed during Redis call :"
+const redisCallMsg = "Failed during Redis call"
 
 var errInternal = errors.New("internal service error")
 
@@ -46,20 +46,21 @@ type server struct {
 	sessionTimeout time.Duration
 	retryNumber    int
 	updater        func(*redis.Client, context.Context, string, []string, map[string]any) error
+	logger         *zap.Logger
 }
 
-func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int, debug bool) pb.SessionServer {
+func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int, logger *zap.Logger, debug bool) pb.SessionServer {
 	updater := updateSessionInfoTx
 	if debug {
-		log.Println("Mode debug on")
+		logger.Info("Mode debug on")
 		updater = updateSessionInfo
 	}
-	return &server{rdb: rdb, sessionTimeout: sessionTimeout, retryNumber: retryNumber, updater: updater}
+	return &server{rdb: rdb, sessionTimeout: sessionTimeout, retryNumber: retryNumber, updater: updater, logger: logger}
 }
 
 func (s *server) updateWithDefaultTTL(ctx context.Context, id string) {
 	if err := s.rdb.Expire(ctx, id, s.sessionTimeout).Err(); err != nil {
-		log.Println("Failed to set TTL :", err)
+		s.logger.Info("Failed to set TTL", zap.Error(err))
 	}
 }
 
@@ -69,16 +70,16 @@ func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionI
 	defer s.generateMutex.Unlock()
 	for i := 0; i < s.retryNumber; i++ {
 		id := rand.Uint64()
-		idStr := fmt.Sprint(id)
+		idStr := strconv.FormatUint(id, 10)
 		nb, err := s.rdb.Exists(ctx, idStr).Result()
 		if err != nil {
-			log.Println(redisCallMsg, err)
+			s.logger.Error(redisCallMsg, zap.Error(err))
 			return nil, errInternal
 		}
 		if nb == 0 {
 			err := s.rdb.HSet(ctx, idStr, creationTimeName, time.Now().String()).Err()
 			if err != nil {
-				log.Println(redisCallMsg, err)
+				s.logger.Error(redisCallMsg, zap.Error(err))
 				return nil, errInternal
 			}
 			s.updateWithDefaultTTL(ctx, idStr)
@@ -89,14 +90,14 @@ func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionI
 }
 
 func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.SessionInfo, error) {
-	id := fmt.Sprint(in.Id)
+	id := strconv.FormatUint(in.Id, 10)
 	info, err := s.rdb.HGetAll(ctx, id).Result()
 	if err != nil {
 		if err == redis.Nil {
 			return &pb.SessionInfo{}, nil
 		}
 
-		log.Println(redisCallMsg, err)
+		s.logger.Error(redisCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
 
@@ -117,9 +118,9 @@ func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 			info[k] = v
 		}
 	}
-	id := fmt.Sprint(in.Id)
+	id := strconv.FormatUint(in.Id, 10)
 	if err := s.updater(s.rdb, ctx, id, keyToDelete, info); err != nil {
-		log.Println(redisCallMsg, err)
+		s.logger.Error(redisCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
 	s.updateWithDefaultTTL(ctx, id)
