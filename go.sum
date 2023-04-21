@@ -8,8 +8,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
-github.com/dvaumoron/puzzlegrpcserver v1.2.3 h1:uAaBgEXvPopANgYIaahXbWgY7QqkW21W+f6b77oKZQU=
-github.com/dvaumoron/puzzlegrpcserver v1.2.3/go.mod h1:OP9LAzNJGpBgvyfA/fmRHPFhNzgPDN7wgnacSO/G1jE=
+github.com/dvaumoron/puzzlegrpcserver v1.2.4 h1:McFghCqKQ5ZHhx1+Nw/BM0/WZvuquMGbJ44jMQh/epE=
+github.com/dvaumoron/puzzlegrpcserver v1.2.4/go.mod h1:OP9LAzNJGpBgvyfA/fmRHPFhNzgPDN7wgnacSO/G1jE=
 github.com/dvaumoron/puzzlelogger v1.2.1 h1:fzYO5i68Cc1MQAMhX9fUajLYpVhAgCPIIBGNuAhY/4M=
 github.com/dvaumoron/puzzlelogger v1.2.1/go.mod h1:HetpUHb1pSy9VHv/wk44QqV/8A+W9neh3Qq3NFqXLuo=
 github.com/dvaumoron/puzzleredisclient v1.1.0 h1:kpZVDHUrR18Rujj3dSi9UA0nFV804pUAjWAdkf0khR4=

@@ -31,7 +31,7 @@ import (
 
 func main() {
 	// should start with this, to benefit from the call to godotenv
-	s := grpcserver.New()
+	s := grpcserver.Make()
 
 	sessionTimeoutSec, err := strconv.ParseInt(os.Getenv("SESSION_TIMEOUT"), 10, 64)
 	if err != nil {
