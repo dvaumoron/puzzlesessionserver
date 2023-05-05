@@ -27,6 +27,7 @@ import (
 
 	pb "github.com/dvaumoron/puzzlesessionservice"
 	"github.com/redis/go-redis/v9"
+	"github.com/uptrace/opentelemetry-go-extra/otelzap"
 	"go.uber.org/zap"
 )
 
@@ -46,10 +47,10 @@ type server struct {
 	sessionTimeout time.Duration
 	retryNumber    int
 	updater        func(*redis.Client, context.Context, string, []string, map[string]any) error
-	logger         *zap.Logger
+	logger         *otelzap.Logger
 }
 
-func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int, logger *zap.Logger, debug bool) pb.SessionServer {
+func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int, logger *otelzap.Logger, debug bool) pb.SessionServer {
 	updater := updateSessionInfoTx
 	if debug {
 		logger.Info("Mode debug on")
@@ -58,13 +59,14 @@ func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int, logge
 	return &server{rdb: rdb, sessionTimeout: sessionTimeout, retryNumber: retryNumber, updater: updater, logger: logger}
 }
 
-func (s *server) updateWithDefaultTTL(ctx context.Context, id string) {
-	if err := s.rdb.Expire(ctx, id, s.sessionTimeout).Err(); err != nil {
-		s.logger.Info("Failed to set TTL", zap.Error(err))
+func (s *server) updateWithDefaultTTL(logger otelzap.LoggerWithCtx, id string) {
+	if err := s.rdb.Expire(logger.Context(), id, s.sessionTimeout).Err(); err != nil {
+		logger.Info("Failed to set TTL", zap.Error(err))
 	}
 }
 
 func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionId, error) {
+	logger := s.logger.Ctx(ctx)
 	// avoid id clash when generating, but possible bottleneck
 	s.generateMutex.Lock()
 	defer s.generateMutex.Unlock()
@@ -73,16 +75,16 @@ func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionI
 		idStr := strconv.FormatUint(id, 10)
 		nb, err := s.rdb.Exists(ctx, idStr).Result()
 		if err != nil {
-			s.logger.Error(redisCallMsg, zap.Error(err))
+			logger.Error(redisCallMsg, zap.Error(err))
 			return nil, errInternal
 		}
 		if nb == 0 {
 			err := s.rdb.HSet(ctx, idStr, creationTimeName, time.Now().String()).Err()
 			if err != nil {
-				s.logger.Error(redisCallMsg, zap.Error(err))
+				logger.Error(redisCallMsg, zap.Error(err))
 				return nil, errInternal
 			}
-			s.updateWithDefaultTTL(ctx, idStr)
+			s.updateWithDefaultTTL(logger, idStr)
 			return &pb.SessionId{Id: id}, nil
 		}
 	}
@@ -90,6 +92,7 @@ func (s *server) Generate(ctx context.Context, in *pb.SessionInfo) (*pb.SessionI
 }
 
 func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.SessionInfo, error) {
+	logger := s.logger.Ctx(ctx)
 	id := strconv.FormatUint(in.Id, 10)
 	info, err := s.rdb.HGetAll(ctx, id).Result()
 	if err != nil {
@@ -97,16 +100,17 @@ func (s *server) GetSessionInfo(ctx context.Context, in *pb.SessionId) (*pb.Sess
 			return &pb.SessionInfo{}, nil
 		}
 
-		s.logger.Error(redisCallMsg, zap.Error(err))
+		logger.Error(redisCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
 
-	s.updateWithDefaultTTL(ctx, id)
+	s.updateWithDefaultTTL(logger, id)
 	delete(info, creationTimeName)
 	return &pb.SessionInfo{Info: info}, nil
 }
 
 func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*pb.Response, error) {
+	logger := s.logger.Ctx(ctx)
 	info := map[string]any{}
 	keyToDelete := []string{}
 	for k, v := range in.Info {
@@ -120,10 +124,10 @@ func (s *server) UpdateSessionInfo(ctx context.Context, in *pb.SessionUpdate) (*
 	}
 	id := strconv.FormatUint(in.Id, 10)
 	if err := s.updater(s.rdb, ctx, id, keyToDelete, info); err != nil {
-		s.logger.Error(redisCallMsg, zap.Error(err))
+		logger.Error(redisCallMsg, zap.Error(err))
 		return nil, errInternal
 	}
-	s.updateWithDefaultTTL(ctx, id)
+	s.updateWithDefaultTTL(logger, id)
 	return &pb.Response{Success: true}, nil
 }
 
