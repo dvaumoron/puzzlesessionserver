@@ -18,7 +18,6 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	"os"
 	"strconv"
@@ -29,8 +28,6 @@ import (
 	redisclient "github.com/dvaumoron/puzzleredisclient"
 	"github.com/dvaumoron/puzzlesessionserver/sessionserver"
 	pb "github.com/dvaumoron/puzzlesessionservice"
-	"github.com/dvaumoron/puzzletelemetry"
-	"go.uber.org/zap"
 )
 
 const serviceName = "PuzzleSession"
@@ -40,17 +37,7 @@ var version string
 
 func main() {
 	// should start with this, to benefit from the call to godotenv
-	s := grpcserver.Make()
-
-	tp, err := puzzletelemetry.Init(serviceName, version, os.Getenv("EXEC_ENV"))
-	if err != nil {
-		s.Logger.Fatal("Failed to initialize trace provider", zap.Error(err))
-	}
-	defer func() {
-		if err = tp.Shutdown(context.Background()); err != nil {
-			s.Logger.Fatal("Failed to shutdown trace provider", zap.Error(err))
-		}
-	}()
+	s := grpcserver.Make(serviceName, version)
 
 	sessionTimeoutSec, err := strconv.ParseInt(os.Getenv("SESSION_TIMEOUT"), 10, 64)
 	if err != nil {
