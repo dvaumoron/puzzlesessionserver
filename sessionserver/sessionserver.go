@@ -28,8 +28,11 @@ import (
 	pb "github.com/dvaumoron/puzzlesessionservice"
 	"github.com/redis/go-redis/v9"
 	"github.com/uptrace/opentelemetry-go-extra/otelzap"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
+
+const sessionKey = "PuzzleSession"
 
 // this key maintains the existence of the session when there is no other data,
 // but it is never send to client nor updated by it
@@ -50,10 +53,13 @@ type server struct {
 	logger         *otelzap.Logger
 }
 
-func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int, logger *otelzap.Logger, debug bool) pb.SessionServer {
+func New(rdb *redis.Client, sessionTimeout time.Duration, retryNumber int, logger *otelzap.Logger, tp trace.TracerProvider, debug bool) pb.SessionServer {
 	updater := updateSessionInfoTx
 	if debug {
-		logger.Info("Mode debug on")
+		ctx, initSpan := tp.Tracer(sessionKey).Start(context.Background(), "initialization")
+		defer initSpan.End()
+
+		logger.InfoContext(ctx, "Mode debug on")
 		updater = updateSessionInfo
 	}
 	return &server{rdb: rdb, sessionTimeout: sessionTimeout, retryNumber: retryNumber, updater: updater, logger: logger}

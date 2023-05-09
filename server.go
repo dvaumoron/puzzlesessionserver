@@ -54,7 +54,7 @@ func main() {
 
 	rdb := redisclient.Create(s.Logger)
 
-	pb.RegisterSessionServer(s, sessionserver.New(rdb, sessionTimeout, retryNumber, s.Logger, debug))
+	pb.RegisterSessionServer(s, sessionserver.New(rdb, sessionTimeout, retryNumber, s.Logger, s.TracerProvider, debug))
 
 	s.Start()
 }
