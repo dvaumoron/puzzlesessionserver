@@ -30,14 +30,12 @@ import (
 	pb "github.com/dvaumoron/puzzlesessionservice"
 )
 
-const serviceName = "PuzzleSession"
-
 //go:embed version.txt
 var version string
 
 func main() {
 	// should start with this, to benefit from the call to godotenv
-	s := grpcserver.Make(serviceName, version)
+	s := grpcserver.Make(sessionserver.SessionKey, version)
 
 	sessionTimeoutSec, err := strconv.ParseInt(os.Getenv("SESSION_TIMEOUT"), 10, 64)
 	if err != nil {
